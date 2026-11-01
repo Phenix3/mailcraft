@@ -1,0 +1,92 @@
+# Project TODO
+
+- [x] Mettre en place le modèle de données multi-utilisateur pour les abonnés, segments, modèles, campagnes, métriques et désabonnements.
+- [x] Ajouter les procédures sécurisées de gestion des abonnés, incluant ajout, suppression, changement de statut et import CSV validé.
+- [x] Ajouter les procédures sécurisées de gestion des segments fondés sur les tags, le statut et la date d’inscription.
+- [x] Ajouter les procédures sécurisées de gestion des modèles d’emails, y compris les modèles intégrés et personnels.
+- [x] Ajouter les procédures sécurisées de création, mise à jour, duplication et gestion des états de campagnes.
+- [x] Implémenter l’éditeur d’emails par blocs avec texte, image, bouton et séparateur, aperçu en direct et sérialisation du contenu.
+- [x] Concevoir le tableau de bord avec indicateurs d’ouverture, de clic, d’abonnés et de croissance.
+- [x] Concevoir la navigation latérale et les écrans abonnés, segments, campagnes, éditeur, modèles et analyses selon la palette corail, blanc et charbon.
+- [x] Mettre en œuvre l’envoi SMTP réel avec une configuration secrète, un lien de désabonnement et une journalisation d’envoi.
+- [x] Mettre en œuvre la planification de campagnes à exécution automatisée, idempotente et pilotable.
+- [x] Mettre en œuvre le suivi des ouvertures, clics, désabonnements et graphiques de performance.
+- [x] Exposer la bibliothèque de modèles intégrés via une procédure sécurisée, en complément des modèles personnels.
+- [x] Ajouter la duplication sécurisée de campagnes avec retour à l’état brouillon.
+- [x] Rendre la replanification pilotable et nettoyer le job d’exécution après un envoi réussi.
+- [x] Écrire et exécuter les tests unitaires des règles métier et des parcours critiques.
+- [x] Vérifier visuellement les interfaces en version bureau et mobile, puis corriger les écarts.
+- [x] Sauvegarder une version fonctionnelle du projet et présenter les instructions de configuration SMTP et de publication.
+- [x] Ajouter un espace d’administration sécurisé pour configurer et valider le transport SMTP à partir de secrets de projet.
+- [x] Ajouter un registre de consentement et de préférences pour documenter l’origine, la date et le retrait du consentement.
+- [x] Ajouter la réception de signaux de rebond avec suppression automatique après rebond définitif et journalisation associée.
+- [x] Ajouter des auto-répondeurs déclenchés après une inscription, avec délai et segment d’audience configurables.
+- [x] Ajouter l’interface d’administration des auto-répondeurs, de la délivrabilité et de la conformité.
+- [x] Étendre les tests aux règles de consentement, rebonds, auto-répondeurs et configuration SMTP.
+- [x] Ajouter des tests serveur couvrant les procédures critiques de rebond, de consentement, de planification et de duplication.
+- [x] Ajouter un test de transport SMTP depuis l’administration, sans exposer de secret dans le navigateur.
+- [x] Réaliser une passe finale de contrôle visuel sur les interfaces principales bureau et mobile.
+- [x] Documenter les écarts de la revue visuelle finale et les corrections retenues.
+- [x] Documenter les étapes de configuration SMTP, le test du transport, les rebonds et la publication en production.
+- [x] Bloquer l’envoi, la planification et l’activation d’auto-répondeur tant que le transport SMTP n’est pas configuré.
+- [x] Ajouter une procédure IA sécurisée pour générer et optimiser les objets, pré-en-têtes et contenus d’email depuis l’éditeur.
+- [x] Intégrer un panneau d’assistance IA dans l’éditeur avec application contrôlée des suggestions.
+- [x] Ajouter une prévisualisation de campagne pour formats mobile, tablette et bureau avant l’envoi.
+- [x] Ajouter des agrégats de délivrabilité par jour pour les rebonds et désabonnements.
+- [x] Ajouter des graphiques interactifs d’évolution des taux de rebond et de désabonnement au tableau de bord.
+- [x] Écrire les tests de l’assistance IA, des agrégats de délivrabilité et de la prévisualisation responsive.
+- [x] Vérifier visuellement l’éditeur IA, les formats d’aperçu et les graphiques, puis sauvegarder la version améliorée.
+- [x] Ajouter les sélecteurs de langue et de ton de marque à l’assistant IA, avec transmission sécurisée à l’API de génération.
+- [x] Ajouter un envoi de test SMTP à une adresse explicitement renseignée depuis l’éditeur, sans toucher aux métriques de campagne.
+- [x] Ajouter au tableau de bord des alertes critiques de rebond et de désabonnement, fondées sur des seuils lisibles.
+- [x] Étendre les tests aux personnalisations IA, à l’envoi de test et aux règles d’alerte.
+- [x] Vérifier visuellement les nouveaux contrôles et sauvegarder la version mise à jour.
+- [x] Tester le parcours d’envoi de test autorisé et vérifier qu’il n’écrit aucune métrique de campagne.
+- [x] Tester le moteur réel d’envoi de test pour confirmer l’absence d’écriture de livraison, de compteur et de tracking d’ouverture ou de clic.
+- [x] Vérifier visuellement les dialogues enrichis de l’assistant IA et de l’email de test, puis sauvegarder la version finalisée.
+- [x] Permettre la vérification visuelle des dialogues IA et test depuis les liens de prévisualisation, sans modifier le flux utilisateur habituel.
+- [x] Ajouter des paramètres utilisateur persistants pour les seuils d’alerte de rebond et de désabonnement.
+- [x] Ajouter un historique des emails de test avec destinataire, contenu, date et action de renvoi sécurisé.
+- [x] Ajouter des profils de ton de marque personnels réutilisables dans l’assistant IA.
+- [x] Créer la page Paramètres avec les sections Délivrabilité, Emails de test et Voix de marque.
+- [x] Relier les seuils personnalisés aux alertes du tableau de bord et les profils de marque à l’assistant IA.
+- [x] Écrire les tests métier et vérifier visuellement les nouveaux parcours avant sauvegarde.
+- [x] Afficher un aperçu réel du contenu dans l’historique des emails de test.
+- [x] Vérifier visuellement la sélection de profil de marque dans l’assistant IA et le parcours de renvoi depuis l’historique.
+- [x] Vérifier le renvoi depuis l’historique avec un transport SMTP réel et confirmer son retour technique côté serveur.
+- [x] Enregistrer le transport SMTP de test fourni dans les paramètres sécurisés du projet.
+- [x] Vérifier la connectivité SMTP réelle côté serveur, sans exposer les secrets au navigateur.
+- [x] Envoyer puis renvoyer un email de test réel depuis l’historique afin de valider l’ensemble du parcours.
+- [x] Corriger l’identité d’enveloppe SMTP afin qu’elle soit acceptée par le serveur d’envoi configuré.
+- [x] Isoler les tests de blocage SMTP de la configuration réelle afin de préserver la couverture des garde-fous.
+- [x] Diagnostiquer l’échec de désérialisation de la réponse de l’assistant IA sur l’éditeur de campagne.
+- [x] Rendre l’extraction des suggestions IA tolérante aux variations valides de format de réponse.
+- [x] Ajouter des tests de régression pour les réponses IA encodées et vérifier le parcours de génération.
+- [x] Valider une génération IA réelle depuis le routeur de campagne avec l’extraction robuste nouvellement ajoutée.
+- [x] Inspecter de manière contrôlée la structure de sortie du modèle IA réel et adapter le contrat de suggestion si nécessaire.
+- [x] Borner strictement la longueur de chaque champ de suggestion IA afin d’éviter toute troncature du JSON généré.
+- [x] Ajouter une tentative de repli au format JSON objet lorsque le modèle ne renseigne pas le contenu sous schéma strict.
+- [x] Préférer le modèle validé qui renvoie une suggestion JSON complète et interprétable pour l’assistant MailCraft.
+- [x] Appliquer et tester les limites de longueur de suggestion directement dans la validation serveur IA.
+- [x] Appliquer et tester les limites de longueur de suggestion directement dans la validation serveur IA.
+- [x] Étendre les données de modèles avec catégories, tags, statut, aperçu et métadonnées de création et mise à jour.
+- [x] Ajouter les opérations sécurisées de recherche, filtrage, création, édition, duplication et suppression de modèles personnels.
+- [x] Créer une bibliothèque de modèles avec recherche, filtres, catégories et actions contextuelles.
+- [x] Ajouter un éditeur de modèle et la possibilité d’enregistrer une campagne comme modèle depuis l’éditeur.
+- [x] Permettre d’appliquer un modèle à une campagne nouvelle ou existante avec aperçu avant validation.
+- [x] Écrire les tests des opérations de modèles et vérifier visuellement les parcours complets avant sauvegarde.
+- [x] Définir le modèle d’organisation et l’isolation des réglages SMTP par organisation ou propriétaire.
+- [x] Créer une migration de données pour les profils SMTP multiples, leurs identités expéditrices et leur état de vérification.
+- [x] Ajouter des procédures sécurisées pour créer, mettre à jour, tester, sélectionner et supprimer un profil SMTP d’organisation.
+- [x] Acheminer les campagnes, emails de test et auto-répondeurs par le transport SMTP sélectionné de l’organisation.
+- [x] Adapter l’administration SMTP pour gérer plusieurs profils, une identité active et des contrôles de délivrabilité.
+- [ ] Couvrir l’isolation multi-organisation, les transports sélectionnés et les cas de repli par des tests et une vérification visuelle.
+- [x] Ajouter un stockage d’images isolé par organisation avec validation de format, taille et type MIME.
+- [x] Ajouter une procédure sécurisée d’upload, de liste et de suppression des images de campagne.
+- [x] Intégrer un sélecteur d’images uploadées dans l’éditeur de campagnes et l’éditeur de modèles.
+- [x] Générer et stocker une clé cryptographique aléatoire dédiée au chiffrement des profils SMTP d’organisation.
+- [x] Migrer les préférences SMTP historiques vers un profil d’organisation initial, avec identité expéditrice cohérente pour tous les propriétaires concernés.
+- [x] Retirer réellement les procédures et l’interface SMTP globales au profit exclusif de l’espace Expédition multi-organisation.
+- [x] Ajouter des tests de migration et de non-régression confirmant qu’aucun parcours SMTP global n’est encore utilisé.
+- [ ] Vérifier réellement en session authentifiée les formulaires Expédition et Médias, puis documenter les états et actions observés.
+- [ ] Vérifier en session authentifiée la redirection de l’administration vers Expédition et documenter le parcours de remplacement des réglages historiques.

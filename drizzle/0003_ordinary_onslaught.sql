@@ -1,0 +1,1 @@
+ALTER TABLE `automationRules` ADD `activatedAt` bigint;
