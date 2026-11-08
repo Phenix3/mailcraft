@@ -5,7 +5,7 @@ import { appRouter } from "./routers";
 function testContext(): TrpcContext {
   const timestamp = new Date();
   return {
-    user: { id: 1, openId: "smtp-send-validation", name: "SMTP validation", email: process.env.SMTP_USER ?? "smtp@example.test", loginMethod: "manus", role: "user", createdAt: timestamp, updatedAt: timestamp, lastSignedIn: timestamp },
+    user: { id: 1, openId: "smtp-send-validation", name: "SMTP validation", email: process.env.SMTP_USER ?? "smtp@example.test", loginMethod: "password", role: "user", createdAt: timestamp, updatedAt: timestamp, lastSignedIn: timestamp },
     req: { protocol: "https", headers: { cookie: "" }, get: () => "mailcraft.example" } as TrpcContext["req"],
     res: { clearCookie: () => undefined } as TrpcContext["res"],
   };

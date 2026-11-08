@@ -7,7 +7,7 @@ const describeAiIntegration = process.env.RUN_LLM_INTEGRATION === "true" ? descr
 function aiContext(): TrpcContext {
   const timestamp = new Date();
   return {
-    user: { id: 1, openId: "ai-integration", name: "AI integration", email: "ai@example.test", loginMethod: "manus", role: "user", createdAt: timestamp, updatedAt: timestamp, lastSignedIn: timestamp },
+    user: { id: 1, openId: "ai-integration", name: "AI integration", email: "ai@example.test", loginMethod: "password", role: "user", createdAt: timestamp, updatedAt: timestamp, lastSignedIn: timestamp },
     req: { protocol: "https", headers: {}, get: () => "mailcraft.example" } as TrpcContext["req"],
     res: { clearCookie: () => undefined } as TrpcContext["res"],
   };

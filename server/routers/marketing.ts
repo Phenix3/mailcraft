@@ -1,13 +1,10 @@
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, gte } from "drizzle-orm";
-import { parse as parseCookie } from "cookie";
 import { z } from "zod";
 import { automationDeliveries, automationRules, bounceEvents, brandToneProfiles, campaignDeliveries, campaigns, consentEvents, deliveryAlertSettings, emailTemplates, organizationAssets, segments, smtpProfiles, smtpSettings, subscribers, testEmailHistory } from "../../drizzle/schema";
-import { COOKIE_NAME } from "../../shared/const";
 import { ensureOrganizationForUser, getDb, registerBounce } from "../db";
-import { buildCronExpression, defaultEmailBlocks, getSmtpConfigurationStatus, parseSubscribersCsv, safeBlocks, sendAutomationEmails, sendCampaignEmails, sendTestEmail, verifySmtpTransport } from "../email";
-import { createHeartbeatJob, deleteHeartbeatJob, updateHeartbeatJob } from "../_core/heartbeat";
-import { invokeLLM, listLLMModels } from "../_core/llm";
+import { defaultEmailBlocks, getSmtpConfigurationStatus, parseSubscribersCsv, safeBlocks, sendAutomationEmails, sendCampaignEmails, sendTestEmail, verifySmtpTransport } from "../email";
+import { invokeLLM } from "../_core/llm";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { storagePut } from "../storage";
 import { encryptSmtpPassword } from "../smtp-credentials";
@@ -190,9 +187,7 @@ export const marketingRouter = router({
   }),
   ai: router({
     emailAssistant: protectedProcedure.input(aiEmailInput).mutation(async ({ ctx, input }) => {
-      const { data: models } = await listLLMModels();
-      const model = models.find(item => item.id === "claude-haiku-4-5")?.id ?? models.find(item => item.id === "gpt-5-mini")?.id ?? models[0]?.id;
-      if (!model) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Aucun modèle IA n’est disponible pour le moment." });
+      const model = process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
       const currentContent = input.blocks.map(block => ({ type: block.type, content: block.content || "", url: block.url || "" }));
       const db = await requireDb();
       const profile = input.brandProfileId ? (await db.select().from(brandToneProfiles).where(and(eq(brandToneProfiles.id, input.brandProfileId), eq(brandToneProfiles.userId, ctx.user.id))).limit(1))[0] : null;
@@ -322,10 +317,10 @@ export const marketingRouter = router({
       return { id: Number(result[0].insertId) };
     }),
     sendTest: protectedProcedure.input(z.object({ smtpProfileId: z.number().int().positive().optional(), recipientEmail: z.string().email().max(320), subject: z.string().max(255), previewText: z.string().max(255).optional(), contentBlocks: z.array(emailBlock).min(1).max(40) })).mutation(async ({ ctx, input }) => { await requireConfiguredSmtp(ctx.user.id, input.smtpProfileId); return sendAndRecordTest({ userId: ctx.user.id, ...input, baseUrl: baseUrl(ctx.req) }); }),
-    delete: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => { const db = await requireDb(); const campaign = (await db.select().from(campaigns).where(and(eq(campaigns.id, input.id), eq(campaigns.userId, ctx.user.id))).limit(1))[0]; if (campaign?.scheduleCronTaskUid) { const token = parseCookie(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? ""; await deleteHeartbeatJob(campaign.scheduleCronTaskUid, token); } await db.delete(campaigns).where(and(eq(campaigns.id, input.id), eq(campaigns.userId, ctx.user.id))); return { success: true }; }),
+    delete: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => { const db = await requireDb(); await db.delete(campaigns).where(and(eq(campaigns.id, input.id), eq(campaigns.userId, ctx.user.id))); return { success: true }; }),
     sendNow: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => { const db = await requireDb(); const campaign = (await db.select().from(campaigns).where(and(eq(campaigns.id, input.id), eq(campaigns.userId, ctx.user.id))).limit(1))[0]; if (!campaign) throw new TRPCError({ code: "NOT_FOUND" }); await requireConfiguredSmtp(ctx.user.id, campaign.smtpProfileId); return sendCampaignEmails(input.id, baseUrl(ctx.req)); }),
-    schedule: protectedProcedure.input(z.object({ id: z.number().int().positive(), scheduledFor: z.number().int().positive() })).mutation(async ({ ctx, input }) => { if (input.scheduledFor < now() + 60_000) throw new TRPCError({ code: "BAD_REQUEST", message: "Choisissez une date au moins une minute dans le futur." }); const db = await requireDb(); const campaign = (await db.select().from(campaigns).where(and(eq(campaigns.id, input.id), eq(campaigns.userId, ctx.user.id))).limit(1))[0]; if (!campaign) throw new TRPCError({ code: "NOT_FOUND" }); await requireConfiguredSmtp(ctx.user.id, campaign.smtpProfileId); if (campaign.status === "sent" || campaign.status === "sending") throw new TRPCError({ code: "BAD_REQUEST", message: "Cette campagne ne peut plus être planifiée." }); const token = parseCookie(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? ""; const jobDefinition = { cron: buildCronExpression(input.scheduledFor), path: "/api/scheduled/send-campaign", payload: { campaignId: campaign.id }, description: `Envoi MailCraft : ${campaign.title}` }; let taskUid = campaign.scheduleCronTaskUid; let nextExecutionAt: string | null | undefined; if (taskUid) { const updated = await updateHeartbeatJob(taskUid, jobDefinition, token); nextExecutionAt = updated.nextExecutionAt; } else { const created = await createHeartbeatJob({ name: `mailcraft-campaign-${campaign.id}`, ...jobDefinition }, token); taskUid = created.taskUid; nextExecutionAt = created.nextExecutionAt; } await db.update(campaigns).set({ status: "scheduled", scheduledFor: input.scheduledFor, scheduleCronTaskUid: taskUid, updatedAt: now() }).where(eq(campaigns.id, campaign.id)); return { scheduledFor: input.scheduledFor, nextExecutionAt }; }),
-    unschedule: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => { const db = await requireDb(); const campaign = (await db.select().from(campaigns).where(and(eq(campaigns.id, input.id), eq(campaigns.userId, ctx.user.id))).limit(1))[0]; if (!campaign) throw new TRPCError({ code: "NOT_FOUND" }); if (campaign.scheduleCronTaskUid) { const token = parseCookie(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? ""; await deleteHeartbeatJob(campaign.scheduleCronTaskUid, token); } await db.update(campaigns).set({ status: "draft", scheduledFor: null, scheduleCronTaskUid: null, updatedAt: now() }).where(eq(campaigns.id, input.id)); return { success: true }; }),
+    schedule: protectedProcedure.input(z.object({ id: z.number().int().positive(), scheduledFor: z.number().int().positive() })).mutation(async ({ ctx, input }) => { if (input.scheduledFor < now() + 60_000) throw new TRPCError({ code: "BAD_REQUEST", message: "Choisissez une date au moins une minute dans le futur." }); const db = await requireDb(); const campaign = (await db.select().from(campaigns).where(and(eq(campaigns.id, input.id), eq(campaigns.userId, ctx.user.id))).limit(1))[0]; if (!campaign) throw new TRPCError({ code: "NOT_FOUND" }); await requireConfiguredSmtp(ctx.user.id, campaign.smtpProfileId); if (campaign.status === "sent" || campaign.status === "sending") throw new TRPCError({ code: "BAD_REQUEST", message: "Cette campagne ne peut plus être planifiée." }); await db.update(campaigns).set({ status: "scheduled", scheduledFor: input.scheduledFor, scheduleCronTaskUid: `local-${input.id}`, updatedAt: now() }).where(eq(campaigns.id, campaign.id)); return { scheduledFor: input.scheduledFor, nextExecutionAt: input.scheduledFor }; }),
+    unschedule: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => { const db = await requireDb(); const campaign = (await db.select().from(campaigns).where(and(eq(campaigns.id, input.id), eq(campaigns.userId, ctx.user.id))).limit(1))[0]; if (!campaign) throw new TRPCError({ code: "NOT_FOUND" }); await db.update(campaigns).set({ status: "draft", scheduledFor: null, scheduleCronTaskUid: null, updatedAt: now() }).where(eq(campaigns.id, input.id)); return { success: true }; }),
     analytics: protectedProcedure.input(z.object({ id: z.number().int().positive() })).query(async ({ ctx, input }) => { const db = await requireDb(); const campaign = (await db.select().from(campaigns).where(and(eq(campaigns.id, input.id), eq(campaigns.userId, ctx.user.id))).limit(1))[0]; if (!campaign) throw new TRPCError({ code: "NOT_FOUND" }); const deliveries = await db.select().from(campaignDeliveries).where(eq(campaignDeliveries.campaignId, input.id)); const sent = deliveries.filter(item => item.status === "sent").length; const opened = deliveries.filter(item => item.openedAt !== null).length; const clicked = deliveries.filter(item => item.clickedAt !== null).length; const unsubscribed = deliveries.filter(item => item.unsubscribedAt !== null).length; const timeline = [...deliveries].sort((a,b) => (a.sentAt ?? 0) - (b.sentAt ?? 0)).map(item => ({ timestamp: item.sentAt ?? now(), sent: item.status === "sent" ? 1 : 0, opened: item.openedAt ? 1 : 0, clicked: item.clickedAt ? 1 : 0 })); return { campaign: campaignView(campaign), sent, opened, clicked, unsubscribed, openRate: sent ? Math.round((opened / sent) * 1000) / 10 : 0, clickRate: sent ? Math.round((clicked / sent) * 1000) / 10 : 0, timeline }; }),
   }),
   admin: router({
@@ -375,17 +370,12 @@ export const marketingRouter = router({
     activate: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
       const db = await requireDb(); const rule = (await db.select().from(automationRules).where(and(eq(automationRules.id, input.id), eq(automationRules.userId, ctx.user.id))).limit(1))[0]; if (!rule) throw new TRPCError({ code: "NOT_FOUND", message: "Auto-répondeur introuvable." });
       await requireConfiguredSmtp(ctx.user.id, rule.smtpProfileId);
-      const token = parseCookie(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? "";
-      const definition = { cron: "0 */5 * * * *", path: "/api/scheduled/run-automation", payload: { automationRuleId: rule.id }, description: `Auto-répondeur MailCraft : ${rule.name}` };
-      let taskUid = rule.scheduleCronTaskUid;
-      if (taskUid) await updateHeartbeatJob(taskUid, { ...definition, enable: true }, token); else { const job = await createHeartbeatJob({ name: `mailcraft-automation-${rule.id}`, ...definition }, token); taskUid = job.taskUid; }
       const activatedAt = now();
-      await db.update(automationRules).set({ status: "active", activatedAt, scheduleCronTaskUid: taskUid, updatedAt: activatedAt }).where(eq(automationRules.id, rule.id));
+      await db.update(automationRules).set({ status: "active", activatedAt, scheduleCronTaskUid: `local-${rule.id}`, updatedAt: activatedAt }).where(eq(automationRules.id, rule.id));
       return { success: true, activatedAt };
     }),
     pause: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
       const db = await requireDb(); const rule = (await db.select().from(automationRules).where(and(eq(automationRules.id, input.id), eq(automationRules.userId, ctx.user.id))).limit(1))[0]; if (!rule) throw new TRPCError({ code: "NOT_FOUND", message: "Auto-répondeur introuvable." });
-      if (rule.scheduleCronTaskUid) { const token = parseCookie(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? ""; await updateHeartbeatJob(rule.scheduleCronTaskUid, { enable: false }, token); }
       await db.update(automationRules).set({ status: "paused", updatedAt: now() }).where(eq(automationRules.id, rule.id));
       return { success: true };
     }),
@@ -395,7 +385,9 @@ export const marketingRouter = router({
       return sendAutomationEmails(rule.id, baseUrl(ctx.req));
     }),
     delete: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
-      const db = await requireDb(); const rule = (await db.select().from(automationRules).where(and(eq(automationRules.id, input.id), eq(automationRules.userId, ctx.user.id))).limit(1))[0]; if (!rule) return { success: true }; if (rule.scheduleCronTaskUid) { const token = parseCookie(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? ""; await deleteHeartbeatJob(rule.scheduleCronTaskUid, token); } await db.delete(automationRules).where(eq(automationRules.id, rule.id)); return { success: true };
+      const db = await requireDb();
+      await db.delete(automationRules).where(and(eq(automationRules.id, input.id), eq(automationRules.userId, ctx.user.id)));
+      return { success: true };
     }),
   }),
 });

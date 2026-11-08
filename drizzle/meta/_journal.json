@@ -5,50 +5,8 @@
     {
       "idx": 0,
       "version": "5",
-      "when": 1787321790289,
-      "tag": "0000_gray_skaar",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "5",
-      "when": 1787322110928,
-      "tag": "0001_giant_falcon",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "5",
-      "when": 1787323840635,
-      "tag": "0002_wakeful_lord_tyger",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "5",
-      "when": 1787324463775,
-      "tag": "0003_ordinary_onslaught",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "5",
-      "when": 1787331886449,
-      "tag": "0004_curved_talkback",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "5",
-      "when": 1787336113781,
-      "tag": "0005_last_spirit",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "5",
-      "when": 1787338646460,
-      "tag": "0006_fantastic_scarlet_spider",
+      "when": 1794160825635,
+      "tag": "0000_silly_mister_fear",
       "breakpoints": true
     }
   ]

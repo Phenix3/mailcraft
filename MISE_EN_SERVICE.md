@@ -1,28 +1,77 @@
 # Mise en service MailCraft
 
-## 1. Préparer le profil d’expédition
+MailCraft est une application Node.js autonome (Express + Vite + tRPC + MySQL/Drizzle). Elle ne dépend d'aucun service externe pour son authentification ni pour sa planification d'envoi.
 
-Connectez-vous avec un compte administrateur, ouvrez **Administration**, puis renseignez le nom expéditeur et l’adresse de réponse. Ces informations ne contiennent aucun secret et peuvent être mises à jour dans l’application.
+## 1. Variables d'environnement requises
 
-Les identifiants de transport doivent être ajoutés dans les **paramètres sécurisés du projet**, jamais dans un champ de formulaire ni dans le code. Préparez les cinq variables suivantes :
+| Variable       | Rôle                                                                     |
+| -------------- | ------------------------------------------------------------------------ |
+| `DATABASE_URL` | Connexion MySQL, ex. `mysql://user:pass@localhost:3306/mailcraft`.       |
+| `JWT_SECRET`   | Secret de signature des sessions (cookie `app_session_id`). Obligatoire. |
+| `NODE_ENV`     | `development` ou `production`.                                           |
 
-| Variable | Valeur attendue |
-| --- | --- |
-| `SMTP_HOST` | Hôte SMTP fourni par le prestataire d’envoi. |
-| `SMTP_PORT` | Port SMTP, généralement `587` (STARTTLS) ou `465` (TLS). |
-| `SMTP_USER` | Identifiant SMTP. |
-| `SMTP_PASS` | Mot de passe SMTP ou clé SMTP. |
-| `SMTP_FROM` | Adresse expéditrice autorisée, par exemple `MailCraft <bonjour@domaine.fr>`. |
+Variables optionnelles :
 
-Une fois les variables enregistrées, retournez dans **Administration** et utilisez **Vérifier le transport**. Cette action est exécutée côté serveur ; aucun secret n’est renvoyé au navigateur.
+| Variable                                                        | Rôle                                                                                                 |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `PORT`                                                          | Port d'écoute (par défaut `3000` ; le serveur essaie les suivants si occupé).                        |
+| `OPENAI_API_KEY`                                                | Clé du fournisseur IA. Active l'assistant de rédaction (`marketing.ai`).                             |
+| `OPENAI_BASE_URL`                                               | API compatible OpenAI (OpenAI, Mistral, Groq, LiteLLM…). Défaut : `https://api.openai.com/v1`.       |
+| `OPENAI_MODEL`                                                  | Modèle utilisé par l'assistant. Défaut : `gpt-4o-mini`.                                              |
+| `ADMIN_EMAIL`                                                   | Si défini, ce compte inscrit devient administrateur. À défaut, le premier compte créé est admin.     |
+| `SCHEDULER_SECRET`                                              | Secret pour déclencher manuellement `/api/scheduled/*` via l'en-tête `x-mailcraft-scheduler-secret`. |
+| `SMTP_BOUNCE_WEBHOOK_SECRET`                                    | Secret du webhook de rebonds (voir §4).                                                              |
+| `SMTP_CREDENTIALS_ENCRYPTION_KEY`                               | Clé AES de chiffrement des mots de passe SMTP stockés (32 caractères hex).                           |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Transport SMTP de secours configurable côté serveur.                                                 |
 
-## 2. Activer les flux d’envoi
+Un fichier `.env` à la racine est lu automatiquement (dotenv) et ignoré par git.
 
-Créez une campagne ou un auto-répondeur, puis choisissez l’envoi immédiat, la planification ou l’activation. MailCraft bloque ces actions tant que le transport SMTP est incomplet. Pour les auto-répondeurs, les nouvelles inscriptions sont examinées périodiquement et seuls les abonnés actifs, consentants, non supprimés après rebond et non déjà traités sont éligibles.
+## 2. Base de données
 
-## 3. Configurer les rebonds
+```bash
+pnpm db:push   # génère puis applique les migrations drizzle (dont 0007 : colonne users.passwordHash)
+```
 
-Pour recevoir les rebonds d’un prestataire, définissez également `SMTP_BOUNCE_WEBHOOK_SECRET`, puis configurez le prestataire pour appeler :
+## 3. Lancer l'application
+
+```bash
+pnpm install
+pnpm dev       # développement (tsx watch + Vite, port 3000)
+pnpm build     # build production (client Vite + serveur esbuild)
+pnpm start     # production (node dist/index.js)
+```
+
+## 4. Comptes et connexion
+
+L'authentification se fait par email + mot de passe, entièrement locale :
+
+- Le **premier compte créé** (formulaire d'inscription affiché au démarrage) devient administrateur.
+- La page d'accueil affiche le panneau de connexion/inscription tant qu'aucune session n'existe.
+- Les sessions durent 1 an (JWT signé, cookie httpOnly `app_session_id`). Sur HTTPS le cookie est `SameSite=None; Secure`, sur HTTP local `SameSite=Lax`.
+
+## 5. Profil d'expédition
+
+Connectez-vous, ouvrez **Expédition**, puis créez et vérifiez un profil SMTP (outil **Vérifier le transport**). MailCraft bloque tout envoi tant que le profil actif n'est pas vérifié.
+
+## 6. Planification interne
+
+Les campagnes planifiées sont envoyées par une boucle cron interne au process (croner) : vérification toutes les 30 secondes, et auto-répondeurs analysés toutes les 5 minutes. Aucun service externe n'est nécessaire : la simple exécution de `pnpm start` suffit. Les identifiants `scheduleCronTaskUid` en base sont désormais internes (`local-<id>`).
+
+Si vous préférez déclencher les envois depuis un cron système externe, définissez `SCHEDULER_SECRET` puis appelez :
+
+```text
+POST https://votre-domaine/api/scheduled/send-campaign
+Header: x-mailcraft-scheduler-secret: <SCHEDULER_SECRET>
+Body: {"campaignId": 42}
+```
+
+## 7. Assistant IA (optionnel)
+
+L'assistant de rédaction (`marketing.ai.emailAssistant`) appelle toute API compatible OpenAI. Sans `OPENAI_API_KEY`, seule cette fonctionnalité est indisponible — le reste de l'application fonctionne normalement.
+
+## 8. Rebonds
+
+Pour recevoir les rebonds d'un prestataire, définissez `SMTP_BOUNCE_WEBHOOK_SECRET`, puis configurez le prestataire pour appeler :
 
 ```text
 POST https://votre-domaine/api/webhooks/smtp-bounce
@@ -31,8 +80,6 @@ Header: x-mailcraft-webhook-secret: <SMTP_BOUNCE_WEBHOOK_SECRET>
 
 Le corps doit comporter `userId`, `recipientEmail`, `type` (`hard` ou `soft`) et, si disponibles, `reason`, `providerEventId` et `occurredAt`. Un rebond `hard` marque automatiquement le contact comme non sollicitable ; un rebond `soft` est seulement journalisé.
 
-## 4. Publier et activer la planification
+## 9. Médias
 
-Créez d’abord une nouvelle sauvegarde du projet, puis utilisez le bouton **Publish** de l’interface de gestion pour publier MailCraft. La publication est nécessaire avant l’activation des campagnes planifiées et des auto-répondeurs, car leurs appels automatisés doivent joindre l’URL publique de l’application.
-
-> L’outillage de consentement, désabonnement et rebond facilite vos procédures de conformité. Faites valider vos mentions, base légale, délais de conservation et paramétrage prestataire par votre conseil juridique avant une mise en production.
+Les images de la médiathèque sont enregistrées sur le disque local dans `uploads/` et servies à l'URL `/uploads/…`. Pensez à inclure ce dossier dans vos sauvegardes et à le monter comme volume persistant en production.

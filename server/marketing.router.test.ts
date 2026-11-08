@@ -4,11 +4,7 @@ import type { TrpcContext } from "./_core/context";
 const mocks = vi.hoisted(() => ({
   getDb: vi.fn(),
   registerBounce: vi.fn(),
-  createHeartbeatJob: vi.fn(),
-  deleteHeartbeatJob: vi.fn(),
-  updateHeartbeatJob: vi.fn(),
   invokeLLM: vi.fn(),
-  listLLMModels: vi.fn(),
   sendTestEmail: vi.fn(),
   resolveSmtpTransportForUser: vi.fn(async () => ({ id: 7 })),
 }));
@@ -18,15 +14,8 @@ vi.mock("./db", () => ({
   registerBounce: mocks.registerBounce,
 }));
 
-vi.mock("./_core/heartbeat", () => ({
-  createHeartbeatJob: mocks.createHeartbeatJob,
-  deleteHeartbeatJob: mocks.deleteHeartbeatJob,
-  updateHeartbeatJob: mocks.updateHeartbeatJob,
-}));
-
 vi.mock("./_core/llm", () => ({
   invokeLLM: mocks.invokeLLM,
-  listLLMModels: mocks.listLLMModels,
 }));
 
 vi.mock("./email", async importOriginal => {
@@ -45,7 +34,7 @@ import { buildDeliverabilityAlerts, buildDeliverabilityTrend, parseEmailSuggesti
 function context(role: "user" | "admin" = "user"): TrpcContext {
   const now = new Date();
   return {
-    user: { id: 8, openId: "mailcraft-test", name: "MailCraft Test", email: "test@example.com", loginMethod: "manus", role, createdAt: now, updatedAt: now, lastSignedIn: now },
+    user: { id: 8, openId: "mailcraft-test", name: "MailCraft Test", email: "test@example.com", loginMethod: "password", role, createdAt: now, updatedAt: now, lastSignedIn: now },
     req: { protocol: "https", headers: { cookie: "" }, get: () => "mailcraft.example" } as TrpcContext["req"],
     res: { clearCookie: vi.fn() } as TrpcContext["res"],
   };
@@ -136,33 +125,50 @@ describe("marketing procedures critiques", () => {
     await expect(caller.marketing.campaigns.schedule({ id: 3, scheduledFor: Date.now() + 120_000 })).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
   });
 
-  it("programme une campagne en créant un job planifié et conserve son identifiant", async () => {
+  it("programme une campagne avec un identifiant de tâche interne", async () => {
     const original = { ...process.env };
     Object.assign(process.env, { SMTP_HOST: "smtp.example.test", SMTP_PORT: "587", SMTP_USER: "user", SMTP_PASS: "pass", SMTP_FROM: "MailCraft <hello@example.test>" });
     const db = dbWithSource({ id: 3, userId: 8, title: "Newsletter", status: "draft", scheduleCronTaskUid: null });
     mocks.getDb.mockResolvedValueOnce(db);
-    mocks.createHeartbeatJob.mockResolvedValueOnce({ taskUid: "cron_campaign_3", nextExecutionAt: "2026-08-21T14:00:00Z" });
     const caller = appRouter.createCaller(context("user"));
     try {
       const result = await caller.marketing.campaigns.schedule({ id: 3, scheduledFor: Date.now() + 120_000 });
       expect(result.scheduledFor).toBeGreaterThan(Date.now());
-      expect(mocks.createHeartbeatJob).toHaveBeenCalledWith(expect.objectContaining({ name: "mailcraft-campaign-3", path: "/api/scheduled/send-campaign" }), "");
-      expect(db.update.mock.results[0].value.set).toHaveBeenCalledWith(expect.objectContaining({ status: "scheduled", scheduleCronTaskUid: "cron_campaign_3" }));
+      expect(db.update.mock.results[0].value.set).toHaveBeenCalledWith(expect.objectContaining({ status: "scheduled", scheduleCronTaskUid: "local-3" }));
     } finally {
       process.env = original;
     }
   });
 
   it("retourne une suggestion IA structurée sans exposer le modèle au navigateur", async () => {
-    mocks.listLLMModels.mockResolvedValueOnce({ data: [{ id: "gpt-5-mini" }] });
+    const original = { ...process.env };
+    Object.assign(process.env, { OPENAI_MODEL: "gpt-5-mini" });
     mocks.invokeLLM.mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ subject: "Un objet concis", previewText: "Un pré-en-tête", heading: "Un titre", body: "Un message utile.", ctaLabel: "Découvrir", rationale: "Texte plus direct." }) } }] });
     mocks.getDb.mockResolvedValueOnce({});
     const caller = appRouter.createCaller(context("user"));
-    const result = await caller.marketing.ai.emailAssistant({ task: "draft", language: "anglais", tone: "professionnel", brandTone: "premium", objective: "Présenter une nouveauté", blocks: [] });
-    expect(result).toMatchObject({ subject: "Un objet concis", ctaLabel: "Découvrir", model: "gpt-5-mini" });
-    expect(mocks.invokeLLM).toHaveBeenCalledWith(expect.objectContaining({ model: "gpt-5-mini" }));
-    expect(mocks.invokeLLM.mock.calls[0][0].messages[1].content).toContain("langueDeSortie");
-    expect(mocks.invokeLLM.mock.calls[0][0].messages[1].content).toContain("premium");
+    try {
+      const result = await caller.marketing.ai.emailAssistant({ task: "draft", language: "anglais", tone: "professionnel", brandTone: "premium", objective: "Présenter une nouveauté", blocks: [] });
+      expect(result).toMatchObject({ subject: "Un objet concis", ctaLabel: "Découvrir", model: "gpt-5-mini" });
+      expect(mocks.invokeLLM).toHaveBeenCalledWith(expect.objectContaining({ model: "gpt-5-mini" }));
+      expect(mocks.invokeLLM.mock.calls[0][0].messages[1].content).toContain("langueDeSortie");
+      expect(mocks.invokeLLM.mock.calls[0][0].messages[1].content).toContain("premium");
+    } finally {
+      process.env = original;
+    }
+  });
+
+  it("utilise le modèle IA par défaut lorsque OPENAI_MODEL n'est pas défini", async () => {
+    const original = { ...process.env };
+    delete process.env.OPENAI_MODEL;
+    mocks.invokeLLM.mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ subject: "Objet", previewText: "Pré", heading: "Titre", body: "Corps", ctaLabel: "CTA", rationale: "Pourquoi." }) } }] });
+    mocks.getDb.mockResolvedValueOnce({});
+    const caller = appRouter.createCaller(context("user"));
+    try {
+      const result = await caller.marketing.ai.emailAssistant({ task: "draft", language: "français", tone: "direct", brandTone: "sobre", objective: "Annoncer une mise à jour", blocks: [] });
+      expect(result.model).toBe("gpt-4o-mini");
+    } finally {
+      process.env = original;
+    }
   });
 
   it("interprète une suggestion IA contenue dans une réponse multipartie balisée", () => {
@@ -209,7 +215,6 @@ describe("marketing procedures critiques", () => {
   });
 
   it("applique les instructions du profil de marque sélectionné à l’assistant IA", async () => {
-    mocks.listLLMModels.mockResolvedValueOnce({ data: [{ id: "gpt-5-mini" }] });
     mocks.invokeLLM.mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ subject: "Objet", previewText: "Pré-en-tête", heading: "Titre", body: "Message", ctaLabel: "Lire", rationale: "Voix respectée." }) } }] });
     mocks.getDb.mockResolvedValueOnce(dbWithSource({ id: 4, userId: 8, name: "Voix produit", tone: "premium", instructions: "Écrire avec précision et sobriété." }));
     const caller = appRouter.createCaller(context("user"));
