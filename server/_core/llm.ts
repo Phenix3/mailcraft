@@ -383,8 +383,11 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   }
 
   const resolvedMaxTokens = max_tokens ?? maxTokens;
+  // Modern OpenAI-compatible APIs expect `max_completion_tokens`; some older
+  // gateways only accept the legacy `max_tokens`. We send the modern param
+  // first and fall back automatically on a 400 rejection (see below).
   if (typeof resolvedMaxTokens === "number") {
-    payload.max_tokens = resolvedMaxTokens;
+    payload.max_completion_tokens = resolvedMaxTokens;
   }
 
   if (thinking) {
@@ -405,17 +408,37 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.response_format = normalizedResponseFormat;
   }
 
-  const response = await fetchWithBackoff(resolveApiUrl(), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${ENV.openaiApiKey}`,
-    },
-    body: JSON.stringify(payload),
-  });
+  const sendPayload = async (body: Record<string, unknown>) =>
+    fetchWithBackoff(resolveApiUrl(), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${ENV.openaiApiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+  let response = await sendPayload(payload);
+
+  // Some strictly OpenAI-compatible gateways reject `max_completion_tokens`
+  // with a 400 asking for the legacy `max_tokens`: swap once and retry.
+  if (!response.ok && response.status === 400) {
+    const text = await response.clone().text();
+    if (payload.max_completion_tokens && /\bmax_tokens\b/i.test(text)) {
+      response = await sendPayload({
+        ...payload,
+        max_tokens: payload.max_completion_tokens,
+      });
+    } else if (payload.max_tokens && /max_completion_tokens/i.test(text)) {
+      response = await sendPayload({
+        ...payload,
+        max_completion_tokens: undefined,
+      });
+    }
+  }
 
   if (!response.ok) {
-    const errorText = await response.text();
+    const errorText = await response.clone().text();
     throw new Error(
       `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
     );
